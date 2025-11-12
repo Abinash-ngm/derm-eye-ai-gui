@@ -1,64 +1,28 @@
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Scan, Eye, Download, Share2 } from 'lucide-react';
+import { Scan, Eye, Download, Share2, Loader2 } from 'lucide-react';
 
 const ScanHistoryPage = () => {
-  const scanHistory = [
-    {
-      id: 1,
-      type: 'skin',
-      date: '2024-01-15',
-      time: '14:30',
-      diagnosis: 'Eczema (Dermatitis)',
-      confidence: 87,
-      severity: 'medium',
-      imageUrl: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=200'
-    },
-    {
-      id: 2,
-      type: 'eye',
-      date: '2024-01-12',
-      time: '10:15',
-      diagnosis: 'Cataracts (Early Stage)',
-      confidence: 82,
-      severity: 'medium',
-      imageUrl: 'https://images.unsplash.com/photo-1590642916589-592bca10dfbf?w=200'
-    },
-    {
-      id: 3,
-      type: 'skin',
-      date: '2024-01-08',
-      time: '16:45',
-      diagnosis: 'Psoriasis',
-      confidence: 91,
-      severity: 'high',
-      imageUrl: 'https://images.unsplash.com/photo-1576091160550-2173dba999ef?w=200'
-    },
-    {
-      id: 4,
-      type: 'skin',
-      date: '2024-01-05',
-      time: '11:20',
-      diagnosis: 'No issues detected',
-      confidence: 95,
-      severity: 'low',
-      imageUrl: 'https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=200'
-    },
-    {
-      id: 5,
-      type: 'eye',
-      date: '2024-01-02',
-      time: '09:30',
-      diagnosis: 'Conjunctivitis',
-      confidence: 88,
-      severity: 'medium',
-      imageUrl: 'https://images.unsplash.com/photo-1559757148-5c350d0d3c56?w=200'
+  const { currentUser } = useAuth();
+  const [scanHistory, setScanHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentUser) {
+      // TODO: Fetch scan history from backend
+      // const data = await fetch(`${API_ENDPOINTS.baseUrl}/detect/history/${currentUser.uid}`);
+      setScanHistory([]);
+      setLoading(false);
+    } else {
+      setLoading(false);
     }
-  ];
+  }, [currentUser]);
 
   const severityColors = {
     low: 'bg-accent/20 text-accent',
@@ -79,7 +43,12 @@ const ScanHistoryPage = () => {
         </div>
 
         <div className="grid gap-4">
-          {scanHistory.map((scan) => (
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+          ) : scanHistory.length > 0 ? (
+            scanHistory.map((scan) => (
             <Card key={scan.id} className="hover:shadow-md transition-shadow">
               <CardContent className="p-6">
                 <div className="flex flex-col md:flex-row gap-6">
@@ -144,7 +113,37 @@ const ScanHistoryPage = () => {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            ))
+          ) : (
+            <Card>
+              <CardContent className="p-12 text-center">
+                <Scan className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                <h3 className="text-lg font-semibold mb-2">No Scan History</h3>
+                <p className="text-muted-foreground mb-4">
+                  {currentUser 
+                    ? 'Start by scanning your skin or eyes to build your health history'
+                    : 'Please log in to view your scan history'
+                  }
+                </p>
+                {currentUser && (
+                  <div className="flex gap-3 justify-center">
+                    <Link to="/scan/skin">
+                      <Button>
+                        <Scan className="h-4 w-4 mr-2" />
+                        Scan Skin
+                      </Button>
+                    </Link>
+                    <Link to="/scan/eye">
+                      <Button variant="outline">
+                        <Eye className="h-4 w-4 mr-2" />
+                        Scan Eye
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </main>
 

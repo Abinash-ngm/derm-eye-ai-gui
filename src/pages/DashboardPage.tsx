@@ -1,14 +1,45 @@
 import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import ChatbotWidget from '@/components/ChatbotWidget';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Scan, Eye, Calendar, History, TrendingUp, Activity } from 'lucide-react';
+import { Scan, Eye, Calendar, History, TrendingUp, Activity, Loader2 } from 'lucide-react';
+import { API_ENDPOINTS } from '@/lib/api';
 
 const DashboardPage = () => {
   const { currentUser } = useAuth();
+  const [recentScans, setRecentScans] = useState<any[]>([]);
+  const [stats, setStats] = useState({ totalScans: 0, appointments: 0 });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchDashboardData();
+    } else {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  const fetchDashboardData = async () => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      setLoading(true);
+      
+      // Fetch recent scans (you'll need to add this endpoint)
+      // For now, we'll use empty array
+      setRecentScans([]);
+      setStats({ totalScans: 0, appointments: 0 });
+      
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const quickActions = [
     {
@@ -39,12 +70,6 @@ const DashboardPage = () => {
       link: '/history',
       color: 'bg-accent/10 text-accent'
     }
-  ];
-
-  const recentScans = [
-    { id: 1, type: 'Skin', date: '2024-01-15', result: 'No issues detected', confidence: 92 },
-    { id: 2, type: 'Eye', date: '2024-01-10', result: 'Mild condition', confidence: 85 },
-    { id: 3, type: 'Skin', date: '2024-01-05', result: 'Dermatitis detected', confidence: 78 }
   ];
 
   return (
@@ -87,8 +112,14 @@ const DashboardPage = () => {
               <Activity className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">24</div>
-              <p className="text-xs text-muted-foreground">+3 from last month</p>
+              {loading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.totalScans}</div>
+                  <p className="text-xs text-muted-foreground">Health screenings</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -98,8 +129,14 @@ const DashboardPage = () => {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">2</div>
-              <p className="text-xs text-muted-foreground">1 upcoming this week</p>
+              {loading ? (
+                <Loader2 className="h-6 w-6 animate-spin" />
+              ) : (
+                <>
+                  <div className="text-2xl font-bold">{stats.appointments}</div>
+                  <p className="text-xs text-muted-foreground">Scheduled</p>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -109,8 +146,8 @@ const DashboardPage = () => {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">87%</div>
-              <p className="text-xs text-muted-foreground">Good overall health</p>
+              <div className="text-2xl font-bold">--</div>
+              <p className="text-xs text-muted-foreground">Coming soon</p>
             </CardContent>
           </Card>
         </div>
@@ -129,25 +166,35 @@ const DashboardPage = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {recentScans.map((scan) => (
-                <div key={scan.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full ${scan.type === 'Skin' ? 'bg-primary/10' : 'bg-accent/10'} flex items-center justify-center`}>
-                      {scan.type === 'Skin' ? <Scan className="h-5 w-5 text-primary" /> : <Eye className="h-5 w-5 text-accent" />}
+            {loading ? (
+              <div className="flex justify-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : recentScans.length > 0 ? (
+              <div className="space-y-4">
+                {recentScans.slice(0, 3).map((scan) => (
+                  <div key={scan.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-full ${scan.disease_type === 'skin' ? 'bg-primary/10' : 'bg-accent/10'} flex items-center justify-center`}>
+                        {scan.disease_type === 'skin' ? <Scan className="h-5 w-5 text-primary" /> : <Eye className="h-5 w-5 text-accent" />}
+                      </div>
+                      <div>
+                        <p className="font-medium">{scan.disease_type === 'skin' ? 'Skin' : 'Eye'} Scan</p>
+                        <p className="text-sm text-muted-foreground">{new Date(scan.timestamp).toLocaleDateString()}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium">{scan.type} Scan</p>
-                      <p className="text-sm text-muted-foreground">{scan.date}</p>
+                    <div className="text-right">
+                      <p className="text-sm font-medium">{scan.disease_name}</p>
+                      <p className="text-xs text-muted-foreground">{scan.confidence}% confidence</p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium">{scan.result}</p>
-                    <p className="text-xs text-muted-foreground">{scan.confidence}% confidence</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-8">
+                {currentUser ? 'No scans yet. Start by scanning your skin or eyes!' : 'Please log in to view your scans'}
+              </p>
+            )}
           </CardContent>
         </Card>
       </main>
