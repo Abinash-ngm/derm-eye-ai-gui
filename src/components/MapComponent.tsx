@@ -1,105 +1,79 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin, Phone, Clock } from 'lucide-react';
+import { MapPin, Phone, Clock, Navigation, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { loadGoogleMapsScript, GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
+import { Input } from '@/components/ui/input';
+import { searchNearbyClinics } from '@/lib/api';
 import { toast } from 'sonner';
 
-// Mock clinic data
-const clinics = [
-  {
-    id: 1,
-    name: 'City Medical Center',
-    address: '123 Healthcare Ave, Medical District',
-    phone: '+1 (555) 123-4567',
-    distance: '0.8 km',
-    hours: 'Mon-Fri: 8AM-8PM, Sat-Sun: 9AM-5PM'
-  },
-  {
-    id: 2,
-    name: 'Downtown Health Clinic',
-    address: '456 Wellness Street, Downtown',
-    phone: '+1 (555) 234-5678',
-    distance: '1.2 km',
-    hours: 'Mon-Fri: 9AM-7PM, Sat: 10AM-4PM'
-  },
-  {
-    id: 3,
-    name: 'Riverside Hospital',
-    address: '789 Medical Plaza, Riverside',
-    phone: '+1 (555) 345-6789',
-    distance: '2.5 km',
-    hours: '24/7 Emergency Services'
-  }
-];
+interface Clinic {
+  name: string;
+  address?: string;
+  phone?: string;
+  rating?: number;
+  place_id?: string;
+  geometry?: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+}
 
 const MapComponent = () => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapError, setMapError] = useState<string | null>(null);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [latitude, setLatitude] = useState(40.7128); // Default: New York
+  const [longitude, setLongitude] = useState(-74.0060);
 
   useEffect(() => {
-    // Check if the API key looks like a SerpAPI key (not a Google Maps key)
-    const isSerpApiKey = GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY.length > 50 && !GOOGLE_MAPS_API_KEY.startsWith('AIza');
-    
-    if (isSerpApiKey) {
-      setMapError('SerpAPI key detected. Please use a Google Maps JavaScript API key for map display. Get one from https://console.cloud.google.com/google/maps-apis');
-      toast.error('Invalid API key type. Google Maps requires a Maps JavaScript API key.');
-      return;
+    // Get user's location
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setLatitude(position.coords.latitude);
+          setLongitude(position.coords.longitude);
+          fetchClinics(position.coords.latitude, position.coords.longitude);
+        },
+        (error) => {
+          console.log('Error getting location:', error);
+          fetchClinics(); // Use default location
+        }
+      );
+    } else {
+      fetchClinics(); // Use default location
     }
-
-    loadGoogleMapsScript()
-      .then(() => {
-        // Small delay to ensure Google Maps is fully initialized
-        setTimeout(() => {
-          setMapLoaded(true);
-          initializeMap();
-        }, 100);
-      })
-      .catch((error) => {
-        console.error('Failed to load Google Maps:', error);
-        setMapError(error.message);
-        toast.error('Failed to load Google Maps. Please check your API key.');
-      });
   }, []);
 
-  const initializeMap = () => {
-    if (!mapRef.current || !window.google || !window.google.maps) {
-      console.warn('Google Maps not ready yet');
-      return;
-    }
-
+  const fetchClinics = async (lat?: number, lng?: number) => {
+    setLoading(true);
+    setError(null);
+    
     try {
-      // Initialize map centered on a default location
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: 40.7128, lng: -74.0060 }, // New York as default
-        zoom: 12,
-      });
-
-      // Add markers for clinics using AdvancedMarkerElement (recommended) or fallback to Marker
-      clinics.forEach((clinic, index) => {
-        const position = { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) };
-        
-        // Use the standard Marker (AdvancedMarkerElement requires additional setup)
-        const marker = new window.google.maps.Marker({
-          position: position,
-          map: map,
-          title: clinic.name,
-        });
-
-        const infoWindow = new window.google.maps.InfoWindow({
-          content: `<div style="padding: 10px;"><h3 style="margin: 0 0 8px 0; font-size: 16px;">${clinic.name}</h3><p style="margin: 0; font-size: 14px;">${clinic.address}</p></div>`,
-        });
-
-        marker.addListener('click', () => {
-          infoWindow.open(map, marker);
-        });
-      });
-    } catch (error) {
-      console.error('Error initializing map:', error);
-      setMapError('Failed to initialize map. Please check your API key.');
-      toast.error('Failed to initialize map.');
+      const searchLat = lat || latitude;
+      const searchLng = lng || longitude;
+      
+      const data = await searchNearbyClinics(searchLat, searchLng, 5000);
+      
+      if (data.clinics && data.clinics.length > 0) {
+        setClinics(data.clinics);
+        toast.success(`Found ${data.clinics.length} clinics nearby`);
+      } else {
+        setError('No clinics found in this area');
+        toast.warning('No clinics found. Try a different location.');
+      }
+    } catch (err) {
+      console.error('Error fetching clinics:', err);
+      setError('Failed to load clinic data from backend.');
+      toast.error('Failed to load clinics');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleSearch = () => {
+    fetchClinics();
   };
 
   return (
@@ -107,75 +81,125 @@ const MapComponent = () => {
       <Card>
         <CardHeader>
           <CardTitle>Find Nearby Clinics</CardTitle>
-          <CardDescription>Locate healthcare facilities in your area</CardDescription>
+          <CardDescription>Search for healthcare facilities near you</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Google Maps Container */}
-          <div 
-            ref={mapRef}
-            className="w-full h-96 bg-muted rounded-lg mb-6"
-            style={{ display: mapLoaded && !mapError ? 'block' : 'none' }}
-          />
-          
-          {/* Placeholder when map is loading or errored */}
-          {(!mapLoaded || mapError) && (
-            <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center mb-6">
+          {/* Search Bar */}
+          <div className="flex gap-2 mb-6">
+            <div className="flex-1 grid grid-cols-2 gap-2">
+              <Input
+                type="number"
+                placeholder="Latitude"
+                value={latitude}
+                onChange={(e) => setLatitude(parseFloat(e.target.value))}
+              />
+              <Input
+                type="number"
+                placeholder="Longitude"
+                value={longitude}
+                onChange={(e) => setLongitude(parseFloat(e.target.value))}
+              />
+            </div>
+            <Button onClick={handleSearch} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Searching...
+                </>
+              ) : (
+                <>
+                  <Navigation className="h-4 w-4 mr-2" />
+                  Search
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Map Placeholder - Showing location info */}
+          {!loading && !error && clinics.length > 0 && (
+            <div className="w-full h-96 bg-muted rounded-lg mb-6 flex items-center justify-center">
+              <div className="text-center p-8">
+                <MapPin className="h-16 w-16 mx-auto mb-4 text-primary" />
+                <p className="text-lg font-semibold mb-2">📍 {clinics.length} Clinics Found</p>
+                <p className="text-sm text-muted-foreground">Powered by Google Maps API</p>
+              </div>
+            </div>
+          )}
+
+          {/* Loading State */}
+          {loading && (
+            <div className="w-full h-96 bg-muted rounded-lg mb-6 flex items-center justify-center">
+              <div className="text-center">
+                <Loader2 className="h-16 w-16 mx-auto mb-4 text-primary animate-spin" />
+                <p className="text-muted-foreground">Searching for clinics...</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error State */}
+          {error && (
+            <div className="w-full h-96 bg-muted rounded-lg mb-6 flex items-center justify-center">
               <div className="text-center max-w-md px-4">
-                <MapPin className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground mb-2">
-                  {mapError || 'Loading Google Maps...'}
+                <MapPin className="h-16 w-16 mx-auto mb-4 text-destructive" />
+                <p className="text-muted-foreground mb-2">{error}</p>
+                <p className="text-xs text-muted-foreground mt-4">
+                  Make sure backend is running and GOOGLE_MAPS_API_KEY is configured
                 </p>
-                {mapError && mapError.includes('SerpAPI') && (
-                  <div className="text-sm text-muted-foreground mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded">
-                    <p className="font-semibold mb-2">📍 SerpAPI vs Google Maps API</p>
-                    <p className="text-xs text-left">
-                      • <strong>SerpAPI</strong>: Backend service for scraping Google search results<br/>
-                      • <strong>Google Maps JavaScript API</strong>: Required for interactive maps in browser<br/>
-                      • Get a Maps API key at: <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" className="text-blue-600 underline">Google Cloud Console</a>
-                    </p>
-                  </div>
-                )}
-                {mapError && !mapError.includes('SerpAPI') && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Please ensure VITE_GOOGLE_MAPS_API_KEY is set in your .env file
-                  </p>
-                )}
               </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid gap-4">
-        {clinics.map((clinic) => (
-          <Card key={clinic.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="font-semibold text-lg mb-1">{clinic.name}</h3>
-                  <p className="text-sm text-muted-foreground">{clinic.distance} away</p>
+      {/* Clinic List */}
+      {!loading && clinics.length > 0 && (
+        <div className="grid gap-4">
+          {clinics.map((clinic, index) => (
+            <Card key={index} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-semibold text-lg mb-1">{clinic.name}</h3>
+                    {clinic.rating && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <span className="text-yellow-500">⭐ {clinic.rating}</span>
+                      </div>
+                    )}
+                  </div>
+                  {clinic.geometry && (
+                    <Button 
+                      size="sm" 
+                      onClick={() => window.open(
+                        `https://www.google.com/maps/search/?api=1&query=${clinic.geometry?.location.lat},${clinic.geometry?.location.lng}`,
+                        '_blank'
+                      )}
+                    >
+                      Get Directions
+                    </Button>
+                  )}
                 </div>
-                <Button size="sm">Get Directions</Button>
-              </div>
-              
-              <div className="space-y-2 text-sm">
-                <div className="flex items-start gap-2">
-                  <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <span>{clinic.address}</span>
+                
+                <div className="space-y-2 text-sm">
+                  {clinic.address && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+                      <span>{clinic.address}</span>
+                    </div>
+                  )}
+                  {clinic.phone && (
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <a href={`tel:${clinic.phone}`} className="hover:underline">
+                        {clinic.phone}
+                      </a>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" />
-                  <span>{clinic.phone}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Clock className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                  <span>{clinic.hours}</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

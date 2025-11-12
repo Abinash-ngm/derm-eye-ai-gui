@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MessageCircle, X, Send } from 'lucide-react';
-import { callGeminiAPI } from '@/lib/api';
+import { callChatbotAPI } from '@/lib/api';
 
 interface Message {
   id: number;
@@ -38,9 +38,9 @@ const ChatbotWidget = () => {
     const currentInput = inputValue;
     setInputValue('');
 
-    // Call Gemini API
+    // Call backend chatbot API
     try {
-      const response = await callGeminiAPI(currentInput);
+      const response = await callChatbotAPI(currentInput);
       const aiMessage: Message = {
         id: messages.length + 2,
         text: response,
@@ -49,7 +49,7 @@ const ChatbotWidget = () => {
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Error calling Gemini API:', error);
+      console.error('Error calling chatbot API:', error);
     }
   };
 

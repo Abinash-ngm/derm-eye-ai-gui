@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Bot, User } from 'lucide-react';
-import { callGeminiAPI } from '@/lib/api';
+import { callChatbotAPI } from '@/lib/api';
 
 interface Message {
   id: number;
@@ -18,7 +18,7 @@ const HealthChatbotPage = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
-      text: "Hello! I'm your AI health assistant powered by Gemini. I can help answer your health questions, provide general medical information, and guide you on when to seek professional care. How can I assist you today?",
+      text: "Hello! I'm your AI health assistant powered by our backend. I can help answer your health questions, provide general medical information, and guide you on when to seek professional care. How can I assist you today?",
       isUser: false,
       timestamp: new Date()
     }
@@ -41,9 +41,9 @@ const HealthChatbotPage = () => {
     setInputValue('');
     setIsTyping(true);
 
-    // Call Gemini API
+    // Call backend chatbot API
     try {
-      const response = await callGeminiAPI(currentInput);
+      const response = await callChatbotAPI(currentInput);
       const aiMessage: Message = {
         id: messages.length + 2,
         text: response,
@@ -52,7 +52,7 @@ const HealthChatbotPage = () => {
       };
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Error calling Gemini API:', error);
+      console.error('Error calling chatbot API:', error);
       const errorMessage: Message = {
         id: messages.length + 2,
         text: "Sorry, I encountered an error. Please try again later.",
