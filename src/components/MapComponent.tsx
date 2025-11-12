@@ -60,16 +60,19 @@ const MapComponent = () => {
       zoom: 12,
     });
 
-    // Add markers for clinics
+    // Add markers for clinics using AdvancedMarkerElement (recommended) or fallback to Marker
     clinics.forEach((clinic, index) => {
+      const position = { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) };
+      
+      // Use the standard Marker (AdvancedMarkerElement requires additional setup)
       const marker = new window.google.maps.Marker({
-        position: { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) },
+        position: position,
         map: map,
         title: clinic.name,
       });
 
       const infoWindow = new window.google.maps.InfoWindow({
-        content: `<div><h3>${clinic.name}</h3><p>${clinic.address}</p></div>`,
+        content: `<div style="padding: 10px;"><h3 style="margin: 0 0 8px 0; font-size: 16px;">${clinic.name}</h3><p style="margin: 0; font-size: 14px;">${clinic.address}</p></div>`,
       });
 
       marker.addListener('click', () => {
