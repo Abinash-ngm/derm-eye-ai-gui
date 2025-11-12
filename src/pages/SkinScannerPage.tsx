@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { analyzeSkinImage } from '@/lib/api';
 
 const SkinScannerPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -21,27 +22,47 @@ const SkinScannerPage = () => {
 
     setIsAnalyzing(true);
     
-    // Simulate AI analysis
-    setTimeout(() => {
+    try {
+      // Try to call the real API
+      const result = await analyzeSkinImage(selectedFile);
+      
       setIsAnalyzing(false);
       toast.success('Analysis complete!');
       navigate('/result', {
         state: {
-          diseaseName: 'Eczema (Dermatitis)',
-          confidence: 87,
-          recommendations: [
-            'Consult a dermatologist for professional diagnosis',
-            'Keep the affected area moisturized',
-            'Avoid harsh soaps and irritants',
-            'Consider using hypoallergenic skincare products',
-            'Monitor for any changes in symptoms'
-          ],
+          diseaseName: result.disease_name || 'Unknown Condition',
+          confidence: result.confidence || 0,
+          recommendations: result.recommendations || ['Consult a dermatologist'],
           imageUrl: URL.createObjectURL(selectedFile),
-          severity: 'medium',
+          severity: result.severity || 'medium',
           scanType: 'skin'
         }
       });
-    }, 3000);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      // Fallback to mock data if API fails
+      toast.warning('Using demo data - Backend API not connected');
+      
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        navigate('/result', {
+          state: {
+            diseaseName: 'Eczema (Dermatitis)',
+            confidence: 87,
+            recommendations: [
+              'Consult a dermatologist for professional diagnosis',
+              'Keep the affected area moisturized',
+              'Avoid harsh soaps and irritants',
+              'Consider using hypoallergenic skincare products',
+              'Monitor for any changes in symptoms'
+            ],
+            imageUrl: URL.createObjectURL(selectedFile),
+            severity: 'medium',
+            scanType: 'skin'
+          }
+        });
+      }, 2000);
+    }
   };
 
   return (

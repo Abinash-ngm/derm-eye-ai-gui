@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Send, Bot, User } from 'lucide-react';
+import { callGeminiAPI } from '@/lib/api';
 
 interface Message {
   id: number;
@@ -25,7 +26,7 @@ const HealthChatbotPage = () => {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
@@ -36,20 +37,32 @@ const HealthChatbotPage = () => {
     };
 
     setMessages([...messages, userMessage]);
+    const currentInput = inputValue;
     setInputValue('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    // Call Gemini API
+    try {
+      const response = await callGeminiAPI(currentInput);
       const aiMessage: Message = {
         id: messages.length + 2,
-        text: "This is a placeholder response. To enable real AI conversations, connect the Gemini 2.0 Flash API in your backend. I can provide health information, answer medical questions, and help you understand symptoms. Remember, I'm not a replacement for professional medical advice.",
+        text: response,
         isUser: false,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+      const errorMessage: Message = {
+        id: messages.length + 2,
+        text: "Sorry, I encountered an error. Please try again later.",
+        isUser: false,
+        timestamp: new Date()
+      };
+      setMessages(prev => [...prev, errorMessage]);
+    } finally {
       setIsTyping(false);
-    }, 1500);
+    }
   };
 
   return (

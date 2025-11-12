@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { analyzeEyeImage } from '@/lib/api';
 
 const EyeScannerPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -21,28 +22,48 @@ const EyeScannerPage = () => {
 
     setIsAnalyzing(true);
     
-    // Simulate AI analysis
-    setTimeout(() => {
+    try {
+      // Try to call the real API
+      const result = await analyzeEyeImage(selectedFile);
+      
       setIsAnalyzing(false);
       toast.success('Analysis complete!');
       navigate('/result', {
         state: {
-          diseaseName: 'Cataracts (Early Stage)',
-          confidence: 82,
-          recommendations: [
-            'Schedule an appointment with an ophthalmologist immediately',
-            'Get a comprehensive eye examination',
-            'Discuss treatment options including surgery if needed',
-            'Protect eyes from UV light with sunglasses',
-            'Monitor vision changes regularly',
-            'Consider lifestyle modifications to slow progression'
-          ],
+          diseaseName: result.disease_name || 'Unknown Condition',
+          confidence: result.confidence || 0,
+          recommendations: result.recommendations || ['Consult an ophthalmologist'],
           imageUrl: URL.createObjectURL(selectedFile),
-          severity: 'medium',
+          severity: result.severity || 'medium',
           scanType: 'eye'
         }
       });
-    }, 3000);
+    } catch (error) {
+      console.error('Analysis error:', error);
+      // Fallback to mock data if API fails
+      toast.warning('Using demo data - Backend API not connected');
+      
+      setTimeout(() => {
+        setIsAnalyzing(false);
+        navigate('/result', {
+          state: {
+            diseaseName: 'Cataracts (Early Stage)',
+            confidence: 82,
+            recommendations: [
+              'Schedule an appointment with an ophthalmologist immediately',
+              'Get a comprehensive eye examination',
+              'Discuss treatment options including surgery if needed',
+              'Protect eyes from UV light with sunglasses',
+              'Monitor vision changes regularly',
+              'Consider lifestyle modifications to slow progression'
+            ],
+            imageUrl: URL.createObjectURL(selectedFile),
+            severity: 'medium',
+            scanType: 'eye'
+          }
+        });
+      }, 2000);
+    }
   };
 
   return (

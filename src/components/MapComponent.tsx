@@ -1,6 +1,9 @@
+import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, Phone, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { loadGoogleMapsScript } from '@/lib/googleMaps';
+import { toast } from 'sonner';
 
 // Mock clinic data
 const clinics = [
@@ -31,6 +34,50 @@ const clinics = [
 ];
 
 const MapComponent = () => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadGoogleMapsScript()
+      .then(() => {
+        setMapLoaded(true);
+        initializeMap();
+      })
+      .catch((error) => {
+        console.error('Failed to load Google Maps:', error);
+        setMapError(error.message);
+        toast.error('Failed to load Google Maps. Please check your API key.');
+      });
+  }, []);
+
+  const initializeMap = () => {
+    if (!mapRef.current || !window.google) return;
+
+    // Initialize map centered on a default location
+    const map = new window.google.maps.Map(mapRef.current, {
+      center: { lat: 40.7128, lng: -74.0060 }, // New York as default
+      zoom: 12,
+    });
+
+    // Add markers for clinics
+    clinics.forEach((clinic, index) => {
+      const marker = new window.google.maps.Marker({
+        position: { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) },
+        map: map,
+        title: clinic.name,
+      });
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `<div><h3>${clinic.name}</h3><p>${clinic.address}</p></div>`,
+      });
+
+      marker.addListener('click', () => {
+        infoWindow.open(map, marker);
+      });
+    });
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -39,18 +86,29 @@ const MapComponent = () => {
           <CardDescription>Locate healthcare facilities in your area</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Placeholder for Google Maps */}
-          <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center mb-6">
-            <div className="text-center">
-              <MapPin className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">
-                Google Maps integration placeholder
-              </p>
-              <p className="text-sm text-muted-foreground mt-2">
-                Connect Google Maps API to display interactive map
-              </p>
+          {/* Google Maps Container */}
+          <div 
+            ref={mapRef}
+            className="w-full h-96 bg-muted rounded-lg mb-6"
+            style={{ display: mapLoaded && !mapError ? 'block' : 'none' }}
+          />
+          
+          {/* Placeholder when map is loading or errored */}
+          {(!mapLoaded || mapError) && (
+            <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center mb-6">
+              <div className="text-center">
+                <MapPin className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  {mapError || 'Loading Google Maps...'}
+                </p>
+                {mapError && (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Please ensure VITE_GOOGLE_MAPS_API_KEY is set in your .env file
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 

@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { MessageCircle, X, Send } from 'lucide-react';
+import { callGeminiAPI } from '@/lib/api';
 
 interface Message {
   id: number;
@@ -23,7 +24,7 @@ const ChatbotWidget = () => {
   ]);
   const [inputValue, setInputValue] = useState('');
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!inputValue.trim()) return;
 
     const userMessage: Message = {
@@ -34,18 +35,22 @@ const ChatbotWidget = () => {
     };
 
     setMessages([...messages, userMessage]);
+    const currentInput = inputValue;
     setInputValue('');
 
-    // Simulate AI response
-    setTimeout(() => {
+    // Call Gemini API
+    try {
+      const response = await callGeminiAPI(currentInput);
       const aiMessage: Message = {
         id: messages.length + 2,
-        text: "I'm a placeholder AI response. Connect Gemini API to enable real AI conversations.",
+        text: response,
         isUser: false,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
-    }, 1000);
+    } catch (error) {
+      console.error('Error calling Gemini API:', error);
+    }
   };
 
   return (
