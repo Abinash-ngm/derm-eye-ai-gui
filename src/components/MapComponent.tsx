@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MapPin, Phone, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { loadGoogleMapsScript } from '@/lib/googleMaps';
+import { loadGoogleMapsScript, GOOGLE_MAPS_API_KEY } from '@/lib/googleMaps';
 import { toast } from 'sonner';
 
 // Mock clinic data
@@ -39,10 +39,22 @@ const MapComponent = () => {
   const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Check if the API key looks like a SerpAPI key (not a Google Maps key)
+    const isSerpApiKey = GOOGLE_MAPS_API_KEY && GOOGLE_MAPS_API_KEY.length > 50 && !GOOGLE_MAPS_API_KEY.startsWith('AIza');
+    
+    if (isSerpApiKey) {
+      setMapError('SerpAPI key detected. Please use a Google Maps JavaScript API key for map display. Get one from https://console.cloud.google.com/google/maps-apis');
+      toast.error('Invalid API key type. Google Maps requires a Maps JavaScript API key.');
+      return;
+    }
+
     loadGoogleMapsScript()
       .then(() => {
-        setMapLoaded(true);
-        initializeMap();
+        // Small delay to ensure Google Maps is fully initialized
+        setTimeout(() => {
+          setMapLoaded(true);
+          initializeMap();
+        }, 100);
       })
       .catch((error) => {
         console.error('Failed to load Google Maps:', error);
@@ -52,33 +64,42 @@ const MapComponent = () => {
   }, []);
 
   const initializeMap = () => {
-    if (!mapRef.current || !window.google) return;
+    if (!mapRef.current || !window.google || !window.google.maps) {
+      console.warn('Google Maps not ready yet');
+      return;
+    }
 
-    // Initialize map centered on a default location
-    const map = new window.google.maps.Map(mapRef.current, {
-      center: { lat: 40.7128, lng: -74.0060 }, // New York as default
-      zoom: 12,
-    });
-
-    // Add markers for clinics using AdvancedMarkerElement (recommended) or fallback to Marker
-    clinics.forEach((clinic, index) => {
-      const position = { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) };
-      
-      // Use the standard Marker (AdvancedMarkerElement requires additional setup)
-      const marker = new window.google.maps.Marker({
-        position: position,
-        map: map,
-        title: clinic.name,
+    try {
+      // Initialize map centered on a default location
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: 40.7128, lng: -74.0060 }, // New York as default
+        zoom: 12,
       });
 
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `<div style="padding: 10px;"><h3 style="margin: 0 0 8px 0; font-size: 16px;">${clinic.name}</h3><p style="margin: 0; font-size: 14px;">${clinic.address}</p></div>`,
-      });
+      // Add markers for clinics using AdvancedMarkerElement (recommended) or fallback to Marker
+      clinics.forEach((clinic, index) => {
+        const position = { lat: 40.7128 + (index * 0.01), lng: -74.0060 + (index * 0.01) };
+        
+        // Use the standard Marker (AdvancedMarkerElement requires additional setup)
+        const marker = new window.google.maps.Marker({
+          position: position,
+          map: map,
+          title: clinic.name,
+        });
 
-      marker.addListener('click', () => {
-        infoWindow.open(map, marker);
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: `<div style="padding: 10px;"><h3 style="margin: 0 0 8px 0; font-size: 16px;">${clinic.name}</h3><p style="margin: 0; font-size: 14px;">${clinic.address}</p></div>`,
+        });
+
+        marker.addListener('click', () => {
+          infoWindow.open(map, marker);
+        });
       });
-    });
+    } catch (error) {
+      console.error('Error initializing map:', error);
+      setMapError('Failed to initialize map. Please check your API key.');
+      toast.error('Failed to initialize map.');
+    }
   };
 
   return (
@@ -99,12 +120,22 @@ const MapComponent = () => {
           {/* Placeholder when map is loading or errored */}
           {(!mapLoaded || mapError) && (
             <div className="w-full h-96 bg-muted rounded-lg flex items-center justify-center mb-6">
-              <div className="text-center">
+              <div className="text-center max-w-md px-4">
                 <MapPin className="h-16 w-16 mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground mb-2">
                   {mapError || 'Loading Google Maps...'}
                 </p>
-                {mapError && (
+                {mapError && mapError.includes('SerpAPI') && (
+                  <div className="text-sm text-muted-foreground mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-900 rounded">
+                    <p className="font-semibold mb-2">📍 SerpAPI vs Google Maps API</p>
+                    <p className="text-xs text-left">
+                      • <strong>SerpAPI</strong>: Backend service for scraping Google search results<br/>
+                      • <strong>Google Maps JavaScript API</strong>: Required for interactive maps in browser<br/>
+                      • Get a Maps API key at: <a href="https://console.cloud.google.com/google/maps-apis" target="_blank" className="text-blue-600 underline">Google Cloud Console</a>
+                    </p>
+                  </div>
+                )}
+                {mapError && !mapError.includes('SerpAPI') && (
                   <p className="text-sm text-muted-foreground mt-2">
                     Please ensure VITE_GOOGLE_MAPS_API_KEY is set in your .env file
                   </p>
