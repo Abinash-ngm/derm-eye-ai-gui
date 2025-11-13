@@ -9,6 +9,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { toast } from 'sonner';
+import { registerUserInDB } from '@/lib/api';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -37,6 +38,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       if (userCredential.user) {
         await updateProfile(userCredential.user, { displayName });
+        
+        // Register user in database
+        try {
+          await registerUserInDB(
+            userCredential.user.uid,
+            email,
+            displayName || email.split('@')[0]
+          );
+          console.log('✓ User registered in database');
+        } catch (dbError) {
+          console.error('Failed to register user in database:', dbError);
+          // Don't fail the signup if database registration fails
+        }
       }
       toast.success('Account created successfully!');
     } catch (error: any) {
@@ -47,10 +61,69 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      // Sign in with Firebase
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      // Get Firebase ID token for backend verification
+      const idToken = await userCredential.user.getIdToken();
+      
+      // Verify user exists in backend database (or create if first login)
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            uid: userCredential.user.uid,
+            email: userCredential.user.email,
+            name: userCredential.user.displayName || email.split('@')[0]
+          }),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('✓ User verified in database:', data.message);
+        } else {
+          console.warn('Backend verification failed, but login succeeded');
+        }
+      } catch (dbError) {
+        console.error('Failed to verify user in database:', dbError);
+        // Don't fail the login if backend verification fails
+      }
+      
       toast.success('Logged in successfully!');
     } catch (error: any) {
-      toast.error(error.message || 'Failed to login');
+      // Handle specific Firebase auth errors
+      let errorMessage = 'Failed to login';
+      
+      switch (error.code) {
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password';
+          break;
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid email or password';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed login attempts. Please try again later';
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = 'Network error. Please check your connection';
+          break;
+        default:
+          errorMessage = error.message || 'Failed to login';
+      }
+      
+      toast.error(errorMessage);
       throw error;
     }
   };

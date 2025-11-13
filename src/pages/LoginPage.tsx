@@ -11,6 +11,7 @@ const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login, currentUser } = useAuth();
   const navigate = useNavigate();
 
@@ -22,13 +23,28 @@ const LoginPage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
+    // Basic validation
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      return;
+    }
+    
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     setLoading(true);
     
     try {
       await login(email, password);
+      // Navigate to dashboard on successful login
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Login error:', error);
+      setError(error.message || 'Failed to login. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -46,6 +62,12 @@ const LoginPage = () => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && (
+              <div className="p-3 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded">
+                {error}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -54,7 +76,9 @@ const LoginPage = () => {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="email"
               />
             </div>
             <div className="space-y-2">
@@ -65,7 +89,9 @@ const LoginPage = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="current-password"
               />
             </div>
             <Button type="submit" className="w-full" disabled={loading}>

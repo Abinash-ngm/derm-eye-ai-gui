@@ -27,6 +27,17 @@ const RegisterPage = () => {
     e.preventDefault();
     setError('');
 
+    // Validation
+    if (!displayName.trim()) {
+      setError('Please enter your full name');
+      return;
+    }
+
+    if (!/\S+@\S+\.\S+/.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError('Passwords do not match');
       return;
@@ -41,9 +52,32 @@ const RegisterPage = () => {
     
     try {
       await signup(email, password, displayName);
+      // Navigate to dashboard on successful signup
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup error:', error);
+      
+      // Handle specific Firebase auth errors
+      let errorMessage = 'Failed to create account';
+      
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          errorMessage = 'An account with this email already exists';
+          break;
+        case 'auth/invalid-email':
+          errorMessage = 'Invalid email address';
+          break;
+        case 'auth/operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled';
+          break;
+        case 'auth/weak-password':
+          errorMessage = 'Password is too weak. Please use a stronger password';
+          break;
+        default:
+          errorMessage = error.message || 'Failed to create account';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -75,7 +109,9 @@ const RegisterPage = () => {
                 placeholder="John Doe"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="name"
               />
             </div>
 
@@ -87,7 +123,9 @@ const RegisterPage = () => {
                 placeholder="you@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="email"
               />
             </div>
 
@@ -99,7 +137,9 @@ const RegisterPage = () => {
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="new-password"
               />
             </div>
 
@@ -111,7 +151,9 @@ const RegisterPage = () => {
                 placeholder="••••••••"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={loading}
                 required
+                autoComplete="new-password"
               />
             </div>
 

@@ -8,11 +8,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { analyzeEyeImage } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 
 const EyeScannerPage = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
 
   const handleAnalyze = async () => {
     if (!selectedFile) {
@@ -23,8 +25,11 @@ const EyeScannerPage = () => {
     setIsAnalyzing(true);
     
     try {
-      // Try to call the real API
-      const result = await analyzeEyeImage(selectedFile);
+      // Get auth token if user is logged in
+      const authToken = currentUser ? await currentUser.getIdToken() : undefined;
+      
+      // Call the API with optional auth token
+      const result = await analyzeEyeImage(selectedFile, authToken);
       
       setIsAnalyzing(false);
       toast.success('Analysis complete!');

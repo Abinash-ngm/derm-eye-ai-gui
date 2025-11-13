@@ -20,6 +20,7 @@ export const API_ENDPOINTS = {
   clinicDetails: (placeId: string) => `${API_CONFIG.baseUrl}/clinics/details/${placeId}`,
   
   // Auth endpoints
+  authRegister: `${API_CONFIG.baseUrl}/auth/register`,
   authVerify: `${API_CONFIG.baseUrl}/auth/verify`,
   authUser: (uid: string) => `${API_CONFIG.baseUrl}/auth/user/${uid}`,
   
@@ -53,14 +54,42 @@ export const callChatbotAPI = async (message: string, history?: string): Promise
   }
 };
 
+// Helper function to register user in database
+export const registerUserInDB = async (uid: string, email: string, name: string) => {
+  try {
+    const response = await fetch(API_ENDPOINTS.authRegister, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ uid, email, name }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to register user in database');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('User registration error:', error);
+    throw error;
+  }
+};
+
 // Helper function to analyze skin disease
-export const analyzeSkinImage = async (imageFile: File) => {
+export const analyzeSkinImage = async (imageFile: File, authToken?: string) => {
   const formData = new FormData();
   formData.append('image', imageFile);
 
   try {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(API_ENDPOINTS.skinAnalysis, {
       method: 'POST',
+      headers,
       body: formData,
     });
 
@@ -76,13 +105,19 @@ export const analyzeSkinImage = async (imageFile: File) => {
 };
 
 // Helper function to analyze eye disease
-export const analyzeEyeImage = async (imageFile: File) => {
+export const analyzeEyeImage = async (imageFile: File, authToken?: string) => {
   const formData = new FormData();
   formData.append('image', imageFile);
 
   try {
+    const headers: Record<string, string> = {};
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     const response = await fetch(API_ENDPOINTS.eyeAnalysis, {
       method: 'POST',
+      headers,
       body: formData,
     });
 
