@@ -7,7 +7,7 @@ import ChatbotWidget from '@/components/ChatbotWidget';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Scan, Eye, Calendar, History, TrendingUp, Activity, Loader2 } from 'lucide-react';
-import { API_ENDPOINTS } from '@/lib/api';
+import { getScanHistory, getDashboardStats } from '@/lib/api';
 
 const DashboardPage = () => {
   const { currentUser } = useAuth();
@@ -29,10 +29,16 @@ const DashboardPage = () => {
     try {
       setLoading(true);
       
-      // Fetch recent scans (you'll need to add this endpoint)
-      // For now, we'll use empty array
-      setRecentScans([]);
-      setStats({ totalScans: 0, appointments: 0 });
+      // Fetch dashboard statistics
+      const statsData = await getDashboardStats(currentUser.uid);
+      setStats({
+        totalScans: statsData.totalScans,
+        appointments: statsData.appointments
+      });
+      
+      // Fetch recent scans
+      const scanHistory = await getScanHistory(currentUser.uid, 1, 3);
+      setRecentScans(scanHistory.scans || []);
       
     } catch (error) {
       console.error('Error fetching dashboard data:', error);

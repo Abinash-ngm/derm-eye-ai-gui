@@ -8,12 +8,15 @@ export const API_ENDPOINTS = {
   // Scan endpoints
   skinAnalysis: `${API_CONFIG.baseUrl}/scan/skin`,
   eyeAnalysis: `${API_CONFIG.baseUrl}/scan/eye`,
+  scanHistory: (userUid: string) => `${API_CONFIG.baseUrl}/detect/history/${userUid}`,
+  userStats: (userUid: string) => `${API_CONFIG.baseUrl}/detect/stats/${userUid}`,
   
   // Chatbot endpoint
   chatbot: `${API_CONFIG.baseUrl}/chat`,
   
   // Appointment endpoints
   appointments: `${API_CONFIG.baseUrl}/appointments`,
+  userAppointments: (userUid: string) => `${API_CONFIG.baseUrl}/appointments/${userUid}`,
   
   // Clinic endpoints
   clinicsNearby: `${API_CONFIG.baseUrl}/clinics/nearby`,
@@ -187,7 +190,7 @@ export const createAppointment = async (appointmentData: {
 export const getUserAppointments = async (userUid: string, status?: string) => {
   try {
     const params = status ? `?status=${status}` : '';
-    const response = await fetch(`${API_ENDPOINTS.appointments}/${userUid}${params}`);
+    const response = await fetch(`${API_ENDPOINTS.userAppointments(userUid)}${params}`);
 
     if (!response.ok) {
       throw new Error('Failed to fetch appointments');
@@ -214,6 +217,66 @@ export const cancelAppointment = async (appointmentId: string) => {
     return await response.json();
   } catch (error) {
     console.error('Cancel appointment error:', error);
+    throw error;
+  }
+};
+
+// Helper function to get scan history
+export const getScanHistory = async (userUid: string, page: number = 1, perPage: number = 10, type?: string) => {
+  try {
+    const params = new URLSearchParams({
+      page: page.toString(),
+      per_page: perPage.toString(),
+    });
+    
+    if (type) {
+      params.append('type', type);
+    }
+    
+    const response = await fetch(`${API_ENDPOINTS.scanHistory(userUid)}?${params}`);
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch scan history');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Scan history error:', error);
+    throw error;
+  }
+};
+
+// Helper function to get user stats
+export const getUserStats = async (userUid: string) => {
+  try {
+    const response = await fetch(API_ENDPOINTS.userStats(userUid));
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch user stats');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('User stats error:', error);
+    throw error;
+  }
+};
+
+// Helper function to get dashboard statistics
+export const getDashboardStats = async (userUid: string) => {
+  try {
+    // Get user stats from the new endpoint
+    const userStats = await getUserStats(userUid);
+    
+    // Get user appointments
+    const appointments = await getUserAppointments(userUid);
+    
+    return {
+      totalScans: userStats.total_scans || 0,
+      appointments: appointments.appointments ? appointments.appointments.length : 0
+    };
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
     throw error;
   }
 };

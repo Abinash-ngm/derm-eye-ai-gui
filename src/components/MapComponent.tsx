@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import { searchNearbyClinics } from '@/lib/api';
 import { toast } from 'sonner';
 
-// Load Google Maps script
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
+// Load Google Maps script with Map ID support
+const loadGoogleMapsScript = (apiKey: string, mapId?: string): Promise<void> => {
   return new Promise((resolve, reject) => {
     if (window.google && window.google.maps) {
       resolve();
@@ -14,7 +14,9 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
     }
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    // Include mapId in the script URL if provided
+    const mapIdParam = mapId ? `&map_ids=${mapId}` : '';
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async&libraries=marker${mapIdParam}`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
@@ -41,6 +43,7 @@ interface Clinic {
   };
 }
 
+// Update the marker refs to handle both Marker and AdvancedMarkerElement
 const MapComponent = () => {
   const [clinics, setClinics] = useState<Clinic[]>([]);  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -49,12 +52,25 @@ const MapComponent = () => {
   
   const mapRef = useRef<HTMLDivElement>(null);
   const googleMapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.Marker[]>([]);
-  const userMarkerRef = useRef<google.maps.Marker | null>(null);
+  const markersRef = useRef<(google.maps.Marker | google.maps.marker.AdvancedMarkerElement)[]>([]);
+  const userMarkerRef = useRef<google.maps.Marker | google.maps.marker.AdvancedMarkerElement | null>(null);
+
+  // Handle window resize
+  useEffect(() => {
+    const handleResize = () => {
+      if (googleMapRef.current) {
+        google.maps.event.trigger(googleMapRef.current, 'resize');
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Load Google Maps on component mount
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID; // Optional Map ID for advanced features
     
     if (!apiKey) {
       setError('Google Maps API key not configured');
@@ -62,24 +78,29 @@ const MapComponent = () => {
       return;
     }
 
-    loadGoogleMapsScript(apiKey)
+    loadGoogleMapsScript(apiKey, mapId)
       .then(() => {
         setMapLoaded(true);
         getUserLocation();
       })
       .catch((err) => {
         console.error('Error loading Google Maps:', err);
-        setError('Failed to load Google Maps');
-        toast.error('Failed to load map');
+        setError('Failed to load Google Maps: ' + (err.message || 'Unknown error'));
+        toast.error('Failed to load map: ' + (err.message || 'Unknown error'));
+        
+        // Check if it's a billing error
+        if (err.message && err.message.includes('BillingNotEnabled')) {
+          toast.error('Google Maps API billing is not enabled. Please check your Google Cloud Console and enable billing for your project.');
+        }
       });
   }, []);
 
-  // Initialize map when loaded
+  // Initialize map when loaded and user location is available
   useEffect(() => {
-    if (mapLoaded && mapRef.current && !googleMapRef.current) {
+    if (mapLoaded && mapRef.current && userLocation && !googleMapRef.current) {
       initializeMap();
     }
-  }, [mapLoaded]);
+  }, [mapLoaded, userLocation]);
 
   // Update markers when clinics change
   useEffect(() => {
@@ -121,41 +142,109 @@ const MapComponent = () => {
   const initializeMap = () => {
     if (!mapRef.current || !userLocation) return;
 
-    const map = new google.maps.Map(mapRef.current, {
-      center: userLocation,
-      zoom: 13,
-      mapTypeControl: true,
-      streetViewControl: true,
-      fullscreenControl: true,
-    });
+    try {
+      // Ensure the map container has dimensions
+      if (mapRef.current.offsetWidth === 0 || mapRef.current.offsetHeight === 0) {
+        console.warn('Map container has zero dimensions');
+        // Force a reflow
+        mapRef.current.style.height = '100%';
+        mapRef.current.style.width = '100%';
+      }
 
-    googleMapRef.current = map;
-    addUserMarker(userLocation);
+      // Get Map ID from environment variables (optional)
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+
+      // Initialize map with options
+      const mapOptions: google.maps.MapOptions = {
+        center: userLocation,
+        zoom: 13,
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        // Use Map ID if available for advanced features
+        ...(mapId && { mapId })
+      };
+
+      // Try to create map with fallback for billing issues
+      const map = new google.maps.Map(mapRef.current, mapOptions);
+
+      googleMapRef.current = map;
+      addUserMarker(userLocation);
+      
+      // Trigger resize event to ensure proper rendering
+      setTimeout(() => {
+        if (googleMapRef.current) {
+          google.maps.event.trigger(googleMapRef.current, 'resize');
+          googleMapRef.current.setCenter(userLocation);
+        }
+      }, 100);
+    } catch (error: any) {
+      console.error('Error initializing Google Map:', error);
+      setError('Failed to initialize map: ' + (error.message || 'Unknown error'));
+      toast.error('Failed to initialize map: ' + (error.message || 'Unknown error'));
+      
+      // Check if it's a billing error
+      if (error.message && error.message.includes('BillingNotEnabled')) {
+        setError('Google Maps API billing is not enabled. Please check your Google Cloud Console.');
+        toast.error('Google Maps API billing is not enabled. Please check your Google Cloud Console and enable billing for your project.');
+      }
+    }
   };
+
+  // Reinitialize map when user location changes
+  useEffect(() => {
+    if (mapLoaded && mapRef.current && userLocation && googleMapRef.current) {
+      googleMapRef.current.setCenter(userLocation);
+      addUserMarker(userLocation);
+    }
+  }, [userLocation, mapLoaded]);
 
   const addUserMarker = (location: { lat: number; lng: number }) => {
     if (!googleMapRef.current) return;
 
     // Remove old user marker
     if (userMarkerRef.current) {
-      userMarkerRef.current.setMap(null);
+      if ('setMap' in userMarkerRef.current) {
+        userMarkerRef.current.setMap(null);
+      } else {
+        userMarkerRef.current.map = null;
+      }
     }
 
-    // Create new user marker with custom icon
-    const marker = new google.maps.Marker({
-      position: location,
-      map: googleMapRef.current,
-      title: 'Your Location',
-      icon: {
-        path: google.maps.SymbolPath.CIRCLE,
-        scale: 10,
-        fillColor: '#4285F4',
-        fillOpacity: 1,
-        strokeColor: '#FFFFFF',
-        strokeWeight: 3,
-      },
-      zIndex: 1000,
-    });
+    let marker: google.maps.Marker | google.maps.marker.AdvancedMarkerElement;
+
+    try {
+      // Try to create AdvancedMarkerElement first
+      // Check if we have a mapId which is required for AdvancedMarkerElement
+      const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+      
+      if (mapId && google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+        marker = new google.maps.marker.AdvancedMarkerElement({
+          position: location,
+          map: googleMapRef.current,
+          title: 'Your Location',
+        });
+      } else {
+        // Fallback to regular Marker if no Map ID or AdvancedMarkerElement not available
+        throw new Error('AdvancedMarkerElement not available or Map ID not configured');
+      }
+    } catch (error) {
+      // Fallback to regular Marker if AdvancedMarkerElement fails
+      console.warn('AdvancedMarkerElement not available, falling back to regular Marker:', error);
+      marker = new google.maps.Marker({
+        position: location,
+        map: googleMapRef.current,
+        title: 'Your Location',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: '#4285F4',
+          fillOpacity: 1,
+          strokeColor: '#FFFFFF',
+          strokeWeight: 3,
+        },
+      });
+    }
 
     // Add info window for user location
     const infoWindow = new google.maps.InfoWindow({
@@ -180,7 +269,13 @@ const MapComponent = () => {
     if (!googleMapRef.current) return;
 
     // Clear existing clinic markers
-    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current.forEach(marker => {
+      if ('setMap' in marker) {
+        marker.setMap(null);
+      } else {
+        marker.map = null;
+      }
+    });
     markersRef.current = [];
 
     const bounds = new google.maps.LatLngBounds();
@@ -194,14 +289,35 @@ const MapComponent = () => {
     clinics.forEach((clinic) => {
       if (!clinic.location || !googleMapRef.current) return;
 
-      const marker = new google.maps.Marker({
-        position: { lat: clinic.location.lat, lng: clinic.location.lng },
-        map: googleMapRef.current,
-        title: clinic.name,
-        icon: {
-          url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
-        },
-      });
+      let marker: google.maps.Marker | google.maps.marker.AdvancedMarkerElement;
+
+      try {
+        // Try to create AdvancedMarkerElement first
+        // Check if we have a mapId which is required for AdvancedMarkerElement
+        const mapId = import.meta.env.VITE_GOOGLE_MAPS_MAP_ID;
+        
+        if (mapId && google.maps.marker && google.maps.marker.AdvancedMarkerElement) {
+          marker = new google.maps.marker.AdvancedMarkerElement({
+            position: { lat: clinic.location.lat, lng: clinic.location.lng },
+            map: googleMapRef.current,
+            title: clinic.name,
+          });
+        } else {
+          // Fallback to regular Marker if no Map ID or AdvancedMarkerElement not available
+          throw new Error('AdvancedMarkerElement not available or Map ID not configured');
+        }
+      } catch (error) {
+        // Fallback to regular Marker if AdvancedMarkerElement fails
+        console.warn('AdvancedMarkerElement not available, falling back to regular Marker:', error);
+        marker = new google.maps.Marker({
+          position: { lat: clinic.location.lat, lng: clinic.location.lng },
+          map: googleMapRef.current,
+          title: clinic.name,
+          icon: {
+            url: 'https://maps.google.com/mapfiles/ms/icons/red-dot.png',
+          },
+        });
+      }
 
       // Create info window content
       const infoWindowContent = `
@@ -243,8 +359,13 @@ const MapComponent = () => {
     });
 
     // Fit map to show all markers
-    if (clinics.length > 0 || userLocation) {
+    if (clinics.length > 0 && userLocation) {
+      // If we have clinics, fit bounds to show all of them
       googleMapRef.current.fitBounds(bounds);
+    } else if (userLocation) {
+      // If we only have user location, center on it with appropriate zoom
+      googleMapRef.current.setCenter(userLocation);
+      googleMapRef.current.setZoom(13);
     }
   };
 
